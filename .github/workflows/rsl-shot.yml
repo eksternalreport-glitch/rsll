@@ -12,9 +12,9 @@ on:
         description: 'Telegram chat ID tujuan'
         required: true
       capture_mode:
-        description: 'sides | full | slices | both'
+        description: 'full | sides | slices | both'
         required: false
-        default: 'sides'
+        default: 'full'
 
 permissions:
   contents: read
@@ -51,14 +51,14 @@ jobs:
           RSL_QUERY: ${{ github.event.client_payload.query || inputs.query }}
           TELEGRAM_CHAT_ID: ${{ github.event.client_payload.chat_id || inputs.chat_id }}
           RSL_QUERY_TYPE: ${{ github.event.client_payload.query_type || '' }}
-          CAPTURE_MODE: ${{ github.event.client_payload.capture_mode || inputs.capture_mode || 'sides' }}
+          CAPTURE_MODE: ${{ github.event.client_payload.capture_mode || inputs.capture_mode || 'full' }}
         run: node rsl-shot.js
 
-      - name: Upload debug (kalau gagal)
-        if: failure()
+      - name: Upload debug (selalu)
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: rsl-debug
+          name: rsl-debug-${{ github.run_number }}
           path: artifacts/
           if-no-files-found: ignore
           retention-days: 7
