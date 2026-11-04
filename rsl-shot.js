@@ -16,7 +16,7 @@
 // Env opsional:
 //   RSL_URL   (default halaman RSL Query tenant 1057)
 //   RSL_QUERY_TYPE = ticket | hostname | order
-//   CAPTURE_MODE   = sides (default) | full | slices | both
+//   CAPTURE_MODE   = full (default) | sides | slices | both
 //   CAPTURE_SLICE_PX = tinggi potongan gambar saat mode slices (default 1300)
 // ============================================================
 
@@ -31,7 +31,7 @@ const RSL_URL = process.env.RSL_URL || (
 
 const QUERY = String(process.env.RSL_QUERY || '').trim();
 const QUERY_TYPE = String(process.env.RSL_QUERY_TYPE || '').trim().toLowerCase();
-const CAPTURE_MODE = String(process.env.CAPTURE_MODE || 'sides').trim().toLowerCase();
+const CAPTURE_MODE = String(process.env.CAPTURE_MODE || 'full').trim().toLowerCase();
 const SLICE_PX = Math.max(600, Number(process.env.CAPTURE_SLICE_PX || 1300) || 1300);
 const ART = path.join(process.cwd(), 'artifacts');
 
@@ -229,6 +229,26 @@ async function waitForResult(page) {
 
     await page.waitForTimeout(3000);
   }
+  return false;
+}
+
+// Setelah judul muncul, detail per lane (RSL Information Lane) masih bisa
+// menyusul. Tunggu sampai bagian itu benar-benar ter-render.
+async function waitForDetail(page) {
+  const started = Date.now();
+  while (Date.now() - started < 90000) {
+    const txt = await page.locator('body').innerText().catch(function () { return ''; });
+    const hasLane = /RSL Information Lane/i.test(txt);
+    const hasAlarm = /Active Alarms/i.test(txt);
+    const loading = /Loading RSL Query Result/i.test(txt);
+    if (hasLane && hasAlarm && !loading) {
+      log('Detail lane siap (' + Math.round((Date.now() - started) / 1000) + ' detik).');
+      await page.waitForTimeout(1500);
+      return true;
+    }
+    await page.waitForTimeout(1000);
+  }
+  log('Peringatan: detail lane belum lengkap, capture tetap dilanjutkan.');
   return false;
 }
 
@@ -446,8 +466,9 @@ async function main() {
       throw new Error('Hasil query tidak muncul dalam batas waktu. Lihat artifacts/hasil-tidak-muncul.*');
     }
 
-    const shots = await captureResult(page, QUERY);
-    for (let i = 0; i < shots.length; i++) {
+    await waitForDetail(page);
+
+    const shots = await captureResult(page, QUERY);    for (let i = 0; i < shots.length; i++) {
       await sendToTelegram(botToken, chatId, shots[i].file, shots[i].label);
       if (i < shots.length - 1) await page.waitForTimeout(1200);
     }
