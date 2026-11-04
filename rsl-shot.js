@@ -1,4 +1,4 @@
- 'use strict';
+  'use strict';
 
 // ============================================================
 // Screenshot halaman RSL (DataPilot) lalu kirim ke Telegram.
