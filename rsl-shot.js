@@ -16,7 +16,7 @@
 // Env opsional:
 //   RSL_URL   (default halaman RSL Query tenant 1057)
 //   RSL_QUERY_TYPE = ticket | hostname | order
-//   CAPTURE_MODE   = full (default) | sides | slices | both
+//   CAPTURE_MODE   = page (default) | full | sides | slices | both
 //   CAPTURE_SLICE_PX = tinggi potongan gambar saat mode slices (default 1300)
 // ============================================================
 
@@ -31,7 +31,7 @@ const RSL_URL = process.env.RSL_URL || (
 
 const QUERY = String(process.env.RSL_QUERY || '').trim();
 const QUERY_TYPE = String(process.env.RSL_QUERY_TYPE || '').trim().toLowerCase();
-const CAPTURE_MODE = String(process.env.CAPTURE_MODE || 'full').trim().toLowerCase();
+const CAPTURE_MODE = String(process.env.CAPTURE_MODE || 'page').trim().toLowerCase();
 const SLICE_PX = Math.max(600, Number(process.env.CAPTURE_SLICE_PX || 1300) || 1300);
 const ART = path.join(process.cwd(), 'artifacts');
 
@@ -235,15 +235,17 @@ async function waitForResult(page) {
 // Setelah judul muncul, detail per lane (RSL Information Lane) masih bisa
 // menyusul. Tunggu sampai bagian itu benar-benar ter-render.
 async function waitForDetail(page) {
+  await page.waitForLoadState('networkidle', { timeout: 120000 }).catch(function () {});
   const started = Date.now();
-  while (Date.now() - started < 90000) {
+  while (Date.now() - started < 120000) {
     const txt = await page.locator('body').innerText().catch(function () { return ''; });
-    const hasLane = /RSL Information Lane/i.test(txt);
+    const hasLane = /Lane/i.test(txt);
     const hasAlarm = /Active Alarms/i.test(txt);
+    const hasCrc = /CRC/i.test(txt);
     const loading = /Loading RSL Query Result/i.test(txt);
-    if (hasLane && hasAlarm && !loading) {
+    if (hasLane && hasAlarm && hasCrc && !loading) {
       log('Detail lane siap (' + Math.round((Date.now() - started) / 1000) + ' detik).');
-      await page.waitForTimeout(1500);
+      await page.waitForTimeout(3000);
       return true;
     }
     await page.waitForTimeout(1000);
@@ -336,6 +338,14 @@ async function captureResult(page, query) {
     files.forEach(function (f, i) {
       shots.push({ file: f, label: label('bagian ' + (i + 1) + '/' + files.length) });
     });
+  } else if (mode === 'page') {
+    const out = path.join(ART, 'rsl-page.png');
+    log('Screenshot full page (termasuk header & kolom tiket).');
+    await page.screenshot({ path: out, fullPage: true }).catch(function () {});
+    if (!fs.existsSync(out)) {
+      await page.screenshot({ path: out, fullPage: true }).catch(function () {});
+    }
+    shots.push({ file: out, label: label('') });
   } else if (mode === 'full') {
     const out = path.join(ART, 'rsl-full.png');
     if (root) await shotElement(root, out).catch(function () {});
