@@ -1,0 +1,64 @@
+name: RSL Screenshot
+
+on:
+  repository_dispatch:
+    types: [rsl-shot]
+  workflow_dispatch:
+    inputs:
+      query:
+        description: 'Nomor tiket (INC-...) atau hostname'
+        required: true
+      chat_id:
+        description: 'Telegram chat ID tujuan'
+        required: true
+      capture_mode:
+        description: 'sides | full | slices | both'
+        required: false
+        default: 'sides'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rsl-shot-${{ github.event.client_payload.chat_id || inputs.chat_id }}
+  cancel-in-progress: false
+
+jobs:
+  screenshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Install Chromium (Playwright)
+        run: npx playwright install --with-deps chromium
+
+      - name: Ambil screenshot RSL & kirim ke Telegram
+        env:
+          RSL_USER: ${{ secrets.RSL_USER }}
+          RSL_PASS: ${{ secrets.RSL_PASS }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          RSL_QUERY: ${{ github.event.client_payload.query || inputs.query }}
+          TELEGRAM_CHAT_ID: ${{ github.event.client_payload.chat_id || inputs.chat_id }}
+          RSL_QUERY_TYPE: ${{ github.event.client_payload.query_type || '' }}
+          CAPTURE_MODE: ${{ github.event.client_payload.capture_mode || inputs.capture_mode || 'sides' }}
+        run: node rsl-shot.js
+
+      - name: Upload debug (kalau gagal)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rsl-debug
+          path: artifacts/
+          if-no-files-found: ignore
+          retention-days: 7
