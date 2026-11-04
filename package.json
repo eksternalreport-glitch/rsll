@@ -1,0 +1,12 @@
+{
+  "name": "rsl-screenshot-bot",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Screenshot halaman RSL (DataPilot) via GitHub Actions, kirim ke Telegram.",
+  "scripts": {
+    "start": "node rsl-shot.js"
+  },
+  "dependencies": {
+    "playwright": "^1.49.0"
+  }
+}
