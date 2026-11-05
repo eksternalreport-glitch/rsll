@@ -389,7 +389,6 @@ async function captureResult(page, query) {
       shots.push({ file: f, label: label('bagian ' + (i + 1) + '/' + files.length) });
     });
   } else if (mode === 'page') {
-    const out = path.join(ART, 'rsl-page.png');
     // Paksa semua konten lazy ter-render
     await page.addStyleTag({ content: '* { content-visibility: visible !important; contain: none !important; } img, iframe { loading: eager !important; } [hidden] { display: block !important; }' }).catch(function () {});
     await page.evaluate(function () {
@@ -461,16 +460,16 @@ async function captureResult(page, query) {
     log('Lane element: ' + JSON.stringify(laneEl));
 
     // Ambil screenshot full page
-    await page.evaluate(function () { window.scrollTo(0, 0); });
-    await page.waitForTimeout(1000);
-    // out already declared above
-    log('Screenshot full page (termasuk header, lane, alarm).');
-    await page.screenshot({ path: out, fullPage: true }).catch(function () {});
+    // Scroll ke posisi lane (y~485) dan ambil viewport screenshot
+    await page.evaluate(function () { window.scrollTo(0, 450); });
+    await page.waitForTimeout(3000);
+    const out = path.join(ART, 'rsl-page.png');
+    log('Screenshot viewport di posisi lane (y=450).');
+    await page.screenshot({ path: out }).catch(function () {});
     if (!fs.existsSync(out)) {
-      await page.screenshot({ path: out, fullPage: true }).catch(function () {});
+      await page.screenshot({ path: out }).catch(function () {});
     }
     await page.screenshot({ path: path.join(ART, 'page-full.png'), fullPage: true }).catch(function () {});
-
     const txt = await page.locator('body').innerText().catch(function () { return ''; });
     const hasLane = /Lane/i.test(txt);
     const hasCrc = /CRC/i.test(txt);
