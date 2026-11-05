@@ -472,7 +472,7 @@ async function captureResult(page, query) {
     if (!fs.existsSync(out)) {
       await page.screenshot({ path: out, fullPage: true }).catch(function () {});
     }
-    await page.screenshot({ path: path.join(ART, 'page-full.png'), fullPage: true }).catch(function () {});
+    const txt = await page.locator('body').innerText().catch(function () { return ''; });
     const hasLane = /Lane/i.test(txt);
     const hasCrc = /CRC/i.test(txt);
     const hasAlarm = /Active Alarms/i.test(txt);
