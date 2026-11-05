@@ -477,7 +477,11 @@ async function captureResult(page, query) {
     const hasLane = /Lane/i.test(txt);
     const hasCrc = /CRC/i.test(txt);
     const hasAlarm = /Active Alarms/i.test(txt);
-    log('Teks Lane terdeteksi: ' + hasLane + ' (CRC: ' + hasCrc + ', Alarm: ' + hasAlarm + ')');
+    const hasRx = /RX/i.test(txt);
+    const hasDbm = /dBm/i.test(txt);
+    const hasSfp = /SFP/i.test(txt);
+    const hasOptical = /Optical/i.test(txt);
+    log('Teks terdeteksi: Lane=' + hasLane + ' CRC=' + hasCrc + ' Alarm=' + hasAlarm + ' RX=' + hasRx + ' dBm=' + hasDbm + ' SFP=' + hasSfp + ' Optical=' + hasOptical);
     const diag = 'lane=' + hasLane + ' crc=' + hasCrc + ' alarm=' + hasAlarm + ' ' + JSON.stringify(laneEl);
     shots.push({ file: out, label: label(hasLane ? '' : ' (lane tidak terdeteksi: ' + diag + ')') });
   } else if (mode === 'full') {
