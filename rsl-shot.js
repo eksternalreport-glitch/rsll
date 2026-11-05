@@ -460,9 +460,12 @@ async function captureResult(page, query) {
     log('Lane element: ' + JSON.stringify(laneEl));
 
     // Ambil screenshot full page
+    // Scroll ke posisi lane dan tunggu data render
+    await page.evaluate(function () { window.scrollTo(0, 480); });
+    await page.waitForTimeout(15000);
     // Ambil screenshot full page (semua konten termasuk header, lane, alarm)
     await page.evaluate(function () { window.scrollTo(0, 0); });
-    await page.waitForTimeout(1000);
+    await page.waitForTimeout(2000);
     const out = path.join(ART, 'rsl-page.png');
     log('Screenshot full page (termasuk header, lane, alarm).');
     await page.screenshot({ path: out, fullPage: true }).catch(function () {});
