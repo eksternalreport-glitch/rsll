@@ -434,8 +434,43 @@ async function captureResult(page, query) {
     const hasLane = /Lane/i.test(txt);
     const hasCrc = /CRC/i.test(txt);
     const hasAlarm = /Active Alarms/i.test(txt);
+    // Diagnostik: cari elemen yang mengandung 'Lane' dan cek CSS-nya
+    const laneDiag = await page.evaluate(function () {
+      const all = Array.from(document.querySelectorAll('*'));
+      const hits = all.filter(function (el) { return /Lane/i.test(el.textContent || ''); });
+      if (!hits.length) return { found: false, totalHits: 0 };
+      // Ambil elemen terdalam
+      let target = hits[0];
+      for (let i = 0; i < hits.length; i++) {
+        if (hits[i].children.length === 0) { target = hits[i]; break; }
+      }
+      const r = target.getBoundingClientRect();
+      const s = window.getComputedStyle(target);
+      // Cek semua ancestor untuk overflow/visibility
+      const ancestors = [];
+      let p = target.parentElement;
+      while (p && p !== document.body) {
+        const ps = window.getComputedStyle(p);
+        ancestors.push({ tag: p.tagName, cls: String(p.className||'').slice(0,60), display: ps.display, visibility: ps.visibility, overflow: ps.overflow, height: Math.round(p.getBoundingClientRect().height) });
+        p = p.parentElement;
+      }
+      return {
+        found: true,
+        tag: target.tagName,
+        cls: String(target.className || '').slice(0, 120),
+        text: String(target.textContent || '').slice(0, 120),
+        rect: { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) },
+        display: s.display,
+        visibility: s.visibility,
+        opacity: s.opacity,
+        contentVisibility: s.contentVisibility,
+        overflow: s.overflow,
+        ancestors: ancestors.slice(0, 8)
+      };
+    }).catch(function (e) { return { error: String(e && e.message || e) }; });
     log('Teks Lane terdeteksi: ' + hasLane + ' (CRC: ' + hasCrc + ', Alarm: ' + hasAlarm + ')');
-    const diag = 'lane=' + hasLane + ' crc=' + hasCrc + ' alarm=' + hasAlarm;
+    log('Lane diag: ' + JSON.stringify(laneDiag));
+    const diag = 'lane=' + hasLane + ' crc=' + hasCrc + ' alarm=' + hasAlarm + ' ' + JSON.stringify(laneDiag);
     shots.push({ file: out, label: label(hasLane ? '' : ' (lane tidak terdeteksi: ' + diag + ')') });
   } else if (mode === 'full') {
     const out = path.join(ART, 'rsl-full.png');
