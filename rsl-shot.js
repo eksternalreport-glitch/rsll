@@ -460,19 +460,6 @@ async function captureResult(page, query) {
     }).catch(function (e) { return { error: String(e && e.message || e) }; });
     log('Lane element: ' + JSON.stringify(laneEl));
 
-    // Screenshot elemen lane (jika ada)
-    try {
-      const laneScreenshot = path.join(ART, 'rsl-lane.png');
-      const laneEl2 = await page.locator('h4, h3, h2, div, span').filter({ hasText: /RSL Information Lane/i }).first();
-      if (await laneEl2.count()) {
-        await laneEl2.screenshot({ path: laneScreenshot }).catch(function () {});
-        if (fs.existsSync(laneScreenshot)) {
-          shots.push({ file: laneScreenshot, label: label('RSL Information Lane') });
-          log('Lane element screenshot: ' + laneScreenshot);
-        }
-      }
-    } catch (e) { log('Lane element screenshot gagal: ' + (e && e.message ? e.message : e)); }
-
     // Ambil screenshot full page
     await page.evaluate(function () { window.scrollTo(0, 0); });
     await page.waitForTimeout(1000);
