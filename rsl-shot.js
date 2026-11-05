@@ -390,47 +390,52 @@ async function captureResult(page, query) {
     });
   } else if (mode === 'page') {
     const out = path.join(ART, 'rsl-page.png');
-    const pageHeight = await page.evaluate(function () { return document.documentElement.scrollHeight; }).catch(function () { return 0; });
-    log('Screenshot full page (termasuk header & kolom tiket). Tinggi: ' + pageHeight + ' px.');
-    await page.screenshot({ path: out, fullPage: true }).catch(function () {});
-    if (!fs.existsSync(out)) {
-      await page.screenshot({ path: out, fullPage: true }).catch(function () {});
+    // Paksa semua konten lazy ter-render
+    await page.addStyleTag({ content: '* { content-visibility: visible !important; contain: none !important; } img, iframe { loading: eager !important; }' }).catch(function () {});
+    await page.evaluate(function () {
+      document.querySelectorAll('*').forEach(function (el) {
+        const s = window.getComputedStyle(el);
+        if (s.display === 'none') el.style.display = '';
+        if (s.visibility === 'hidden') el.style.visibility = 'visible';
+        if (s.opacity === '0') el.style.opacity = '1';
+        el.style.contentVisibility = 'visible';
+      });
+    }).catch(function () {});
+    await page.waitForTimeout(2000);
+
+    // Scroll ke bawah perlahan untuk memicu lazy-load
+    const totalH = await page.evaluate(function () { return document.documentElement.scrollHeight; });
+    const step = 150;
+    for (let y = 0; y < totalH; y += step) {
+      await page.evaluate(function (yy) {
+        window.scrollTo(0, yy);
+        window.dispatchEvent(new Event('scroll'));
+      }, y);
+      await page.waitForTimeout(300);
     }
+    await page.evaluate(function () { window.scrollTo(0, document.documentElement.scrollHeight); window.dispatchEvent(new Event('scroll')); });
+    await page.waitForTimeout(10000);
+    // Kembali ke atas
+    await page.evaluate(function () { window.scrollTo(0, 0); window.dispatchEvent(new Event('scroll')); });
+    await page.waitForTimeout(3000);
+
+    // Ambil screenshot viewport di posisi bawah (tempat lane & alarm)
+    await page.evaluate(function () { window.scrollTo(0, document.documentElement.scrollHeight); });
+    await page.waitForTimeout(2000);
+    log('Screenshot viewport di posisi bawah (lane + alarm).');
+    await page.screenshot({ path: out }).catch(function () {});
+    if (!fs.existsSync(out)) {
+      await page.screenshot({ path: out }).catch(function () {});
+    }
+    // Juga simpan full page untuk debug
+    await page.screenshot({ path: path.join(ART, 'page-full.png'), fullPage: true }).catch(function () {});
+
     const txt = await page.locator('body').innerText().catch(function () { return ''; });
     const hasLane = /Lane/i.test(txt);
     const hasCrc = /CRC/i.test(txt);
     const hasAlarm = /Active Alarms/i.test(txt);
-    // Diagnostik: posisi dan style elemen yang mengandung 'Lane'
-    const laneDiag = await page.evaluate(function () {
-      const all = Array.from(document.querySelectorAll('*'));
-      const hits = all.filter(function (el) { return /Lane/i.test(el.textContent || ''); });
-      // Ambil elemen terdalam yang mengandung 'Lane'
-      let target = null;
-      for (let i = 0; i < hits.length; i++) {
-        const el = hits[i];
-        if (el.children.length === 0 || el.innerText.trim().length < 200) { target = el; break; }
-      }
-      if (!target) target = hits[hits.length - 1];
-      if (!target) return { found: false };
-      const r = target.getBoundingClientRect();
-      const s = window.getComputedStyle(target);
-      return {
-        found: true,
-        tag: target.tagName,
-        cls: String(target.className || '').slice(0, 120),
-        rect: { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) },
-        display: s.display,
-        visibility: s.visibility,
-        opacity: s.opacity,
-        contentVisibility: s.contentVisibility,
-        overflow: s.overflow,
-        totalHeight: document.documentElement.scrollHeight,
-        viewportH: window.innerHeight
-      };
-    }).catch(function (e) { return { error: String(e && e.message || e) }; });
     log('Teks Lane terdeteksi: ' + hasLane + ' (CRC: ' + hasCrc + ', Alarm: ' + hasAlarm + ')');
-    log('Lane diag: ' + JSON.stringify(laneDiag));
-    const diag = 'lane=' + hasLane + ' crc=' + hasCrc + ' alarm=' + hasAlarm + ' h=' + pageHeight + ' ' + JSON.stringify(laneDiag);
+    const diag = 'lane=' + hasLane + ' crc=' + hasCrc + ' alarm=' + hasAlarm;
     shots.push({ file: out, label: label(hasLane ? '' : ' (lane tidak terdeteksi: ' + diag + ')') });
   } else if (mode === 'full') {
     const out = path.join(ART, 'rsl-full.png');
