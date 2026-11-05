@@ -400,8 +400,37 @@ async function captureResult(page, query) {
     const hasLane = /Lane/i.test(txt);
     const hasCrc = /CRC/i.test(txt);
     const hasAlarm = /Active Alarms/i.test(txt);
+    // Diagnostik: posisi dan style elemen yang mengandung 'Lane'
+    const laneDiag = await page.evaluate(function () {
+      const all = Array.from(document.querySelectorAll('*'));
+      const hits = all.filter(function (el) { return /Lane/i.test(el.textContent || ''); });
+      // Ambil elemen terdalam yang mengandung 'Lane'
+      let target = null;
+      for (let i = 0; i < hits.length; i++) {
+        const el = hits[i];
+        if (el.children.length === 0 || el.innerText.trim().length < 200) { target = el; break; }
+      }
+      if (!target) target = hits[hits.length - 1];
+      if (!target) return { found: false };
+      const r = target.getBoundingClientRect();
+      const s = window.getComputedStyle(target);
+      return {
+        found: true,
+        tag: target.tagName,
+        cls: String(target.className || '').slice(0, 120),
+        rect: { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) },
+        display: s.display,
+        visibility: s.visibility,
+        opacity: s.opacity,
+        contentVisibility: s.contentVisibility,
+        overflow: s.overflow,
+        totalHeight: document.documentElement.scrollHeight,
+        viewportH: window.innerHeight
+      };
+    }).catch(function (e) { return { error: String(e && e.message || e) }; });
     log('Teks Lane terdeteksi: ' + hasLane + ' (CRC: ' + hasCrc + ', Alarm: ' + hasAlarm + ')');
-    const diag = 'lane=' + hasLane + ' crc=' + hasCrc + ' alarm=' + hasAlarm + ' h=' + pageHeight;
+    log('Lane diag: ' + JSON.stringify(laneDiag));
+    const diag = 'lane=' + hasLane + ' crc=' + hasCrc + ' alarm=' + hasAlarm + ' h=' + pageHeight + ' ' + JSON.stringify(laneDiag);
     shots.push({ file: out, label: label(hasLane ? '' : ' (lane tidak terdeteksi: ' + diag + ')') });
   } else if (mode === 'full') {
     const out = path.join(ART, 'rsl-full.png');
