@@ -227,7 +227,7 @@ async function waitForResult(page) {
       throw new Error('Query tidak menemukan data: ' + QUERY);
     }
 
-    await page.waitForTimeout(3000);
+    await page.waitForTimeout(1500);
   }
   return false;
 }
@@ -263,7 +263,7 @@ async function triggerLazyLoad(page) {
     await page.waitForTimeout(8000);
     // Kembali ke atas
     await page.evaluate(function () { window.scrollTo(0, 0); window.dispatchEvent(new Event('scroll')); });
-    await page.waitForTimeout(3000);
+    await page.waitForTimeout(1500);
     const newHeight = await page.evaluate(function () { return document.documentElement.scrollHeight; });
     // Cek posisi teks Lane
     const laneInfo = await page.evaluate(function () {
@@ -285,9 +285,9 @@ async function triggerLazyLoad(page) {
 // Setelah judul muncul, detail per lane (RSL Information Lane) masih bisa
 // menyusul. Tunggu sampai bagian itu benar-benar ter-render.
 async function waitForDetail(page) {
-  await page.waitForLoadState('networkidle', { timeout: 180000 }).catch(function () {});
+  await page.waitForLoadState('networkidle', { timeout: 60000 }).catch(function () {});
   const started = Date.now();
-  while (Date.now() - started < 180000) {
+  while (Date.now() - started < 60000) {
     const txt = await page.locator('body').innerText().catch(function () { return ''; });
     const hasLane = /Lane/i.test(txt);
     const hasAlarm = /Active Alarms/i.test(txt);
@@ -295,7 +295,7 @@ async function waitForDetail(page) {
     const loading = /Loading RSL Query Result/i.test(txt);
     if (hasLane && hasAlarm && hasCrc && !loading) {
       log('Detail lane siap (' + Math.round((Date.now() - started) / 1000) + ' detik).');
-      await page.waitForTimeout(3000);
+      await page.waitForTimeout(1500);
       return true;
     }
     await page.waitForTimeout(1000);
@@ -419,10 +419,10 @@ async function captureResult(page, query) {
       await page.waitForTimeout(300);
     }
     await page.evaluate(function () { window.scrollTo(0, document.documentElement.scrollHeight); window.dispatchEvent(new Event('scroll')); });
-    await page.waitForTimeout(10000);
+    await page.waitForTimeout(5000);
     // Kembali ke atas
     await page.evaluate(function () { window.scrollTo(0, 0); window.dispatchEvent(new Event('scroll')); });
-    await page.waitForTimeout(3000);
+    await page.waitForTimeout(1500);
 
     // Cari elemen yang mengandung 'Lane', paksa visible + semua ancestor
     const laneEl = await page.evaluate(function () {
