@@ -14,7 +14,7 @@ on:
       capture_mode:
         description: 'full | sides | slices | both'
         required: false
-        default: 'full'
+        default: 'page'
 
 permissions:
   contents: read
@@ -51,8 +51,8 @@ jobs:
           RSL_QUERY: ${{ github.event.client_payload.query || inputs.query }}
           TELEGRAM_CHAT_ID: ${{ github.event.client_payload.chat_id || inputs.chat_id }}
           RSL_QUERY_TYPE: ${{ github.event.client_payload.query_type || '' }}
-          CAPTURE_MODE: ${{ github.event.client_payload.capture_mode || inputs.capture_mode || 'full' }}
-        run: node rsl-shot.js
+          CAPTURE_MODE: ${{ github.event.client_payload.capture_mode || inputs.capture_mode || 'page' }}
+        run: node rsl-shot-v2.js
 
       - name: Upload debug (selalu)
         if: always()
@@ -62,3 +62,4 @@ jobs:
           path: artifacts/
           if-no-files-found: ignore
           retention-days: 7
+ 
