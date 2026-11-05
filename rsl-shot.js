@@ -418,10 +418,10 @@ async function captureResult(page, query) {
       await page.waitForTimeout(300);
     }
     await page.evaluate(function () { window.scrollTo(0, document.documentElement.scrollHeight); window.dispatchEvent(new Event('scroll')); });
-    await page.waitForTimeout(5000);
-    // Kembali ke atas
-    await page.evaluate(function () { window.scrollTo(0, 0); window.dispatchEvent(new Event('scroll')); });
-    await page.waitForTimeout(1500);
+    await page.waitForTimeout(10000);
+    // Tetap di bawah agar lazy content tidak hilang
+    // (jangan scroll ke atas sebelum screenshot)
+
 
     // Cari elemen yang mengandung 'Lane', paksa visible + semua ancestor
     const laneEl = await page.evaluate(function () {
@@ -460,14 +460,14 @@ async function captureResult(page, query) {
     log('Lane element: ' + JSON.stringify(laneEl));
 
     // Ambil screenshot full page
-    // Scroll ke posisi lane (y~485) dan ambil viewport screenshot
-    await page.evaluate(function () { window.scrollTo(0, 450); });
-    await page.waitForTimeout(3000);
+    // Ambil screenshot full page (semua konten termasuk header, lane, alarm)
+    await page.evaluate(function () { window.scrollTo(0, 0); });
+    await page.waitForTimeout(1000);
     const out = path.join(ART, 'rsl-page.png');
-    log('Screenshot viewport di posisi lane (y=450).');
-    await page.screenshot({ path: out }).catch(function () {});
+    log('Screenshot full page (termasuk header, lane, alarm).');
+    await page.screenshot({ path: out, fullPage: true }).catch(function () {});
     if (!fs.existsSync(out)) {
-      await page.screenshot({ path: out }).catch(function () {});
+      await page.screenshot({ path: out, fullPage: true }).catch(function () {});
     }
     await page.screenshot({ path: path.join(ART, 'page-full.png'), fullPage: true }).catch(function () {});
     const txt = await page.locator('body').innerText().catch(function () { return ''; });
