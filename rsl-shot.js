@@ -423,9 +423,9 @@ async function captureResult(page, query) {
     await page.evaluate(function () { window.scrollTo(0, document.documentElement.scrollHeight); });
     await page.waitForTimeout(2000);
     log('Screenshot viewport di posisi bawah (lane + alarm).');
-    await page.screenshot({ path: out }).catch(function () {});
+    await page.screenshot({ path: out, fullPage: true }).catch(function () {});
     if (!fs.existsSync(out)) {
-      await page.screenshot({ path: out }).catch(function () {});
+      await page.screenshot({ path: out, fullPage: true }).catch(function () {});
     }
     // Juga simpan full page untuk debug
     await page.screenshot({ path: path.join(ART, 'page-full.png'), fullPage: true }).catch(function () {});
