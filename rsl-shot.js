@@ -476,7 +476,7 @@ async function captureResult(page, query) {
     // Ambil screenshot full page
     await page.evaluate(function () { window.scrollTo(0, 0); });
     await page.waitForTimeout(1000);
-    const out = path.join(ART, 'rsl-page.png');
+    // out already declared above
     log('Screenshot full page (termasuk header, lane, alarm).');
     await page.screenshot({ path: out, fullPage: true }).catch(function () {});
     if (!fs.existsSync(out)) {
