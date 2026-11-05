@@ -236,21 +236,47 @@ async function waitForResult(page) {
 // Scroll ke bawah lalu ke atas supaya intersection observer terpicu.
 async function triggerLazyLoad(page) {
   try {
+    // Paksa semua konten lazy (content-visibility, contain) agar ter-render.
+    await page.addStyleTag({ content: '* { content-visibility: visible !important; contain: none !important; } img, iframe { loading: eager !important; }' });
+    await page.evaluate(function () {
+      document.querySelectorAll('*').forEach(function (el) {
+        const s = window.getComputedStyle(el);
+        if (s.display === 'none') el.style.display = '';
+        if (s.visibility === 'hidden') el.style.visibility = 'visible';
+        if (s.opacity === '0') el.style.opacity = '1';
+      });
+    });
+    await page.waitForTimeout(2000);
+
     const height = await page.evaluate(function () { return document.documentElement.scrollHeight; });
-    const step = 200;
+    const step = 150;
     for (let y = 0; y < height; y += step) {
       await page.evaluate(function (yy) {
         window.scrollTo(0, yy);
         window.dispatchEvent(new Event('scroll'));
+        window.dispatchEvent(new Event('resize'));
       }, y);
-      await page.waitForTimeout(400);
+      await page.waitForTimeout(300);
     }
+    // Pastikan sampai paling bawah
     await page.evaluate(function () { window.scrollTo(0, document.documentElement.scrollHeight); window.dispatchEvent(new Event('scroll')); });
-    await page.waitForTimeout(6000);
+    await page.waitForTimeout(8000);
+    // Kembali ke atas
     await page.evaluate(function () { window.scrollTo(0, 0); window.dispatchEvent(new Event('scroll')); });
     await page.waitForTimeout(3000);
     const newHeight = await page.evaluate(function () { return document.documentElement.scrollHeight; });
-    log('Lazy-load dipicu (tinggi ' + height + ' -> ' + newHeight + ' px).');
+    // Cek posisi teks Lane
+    const laneInfo = await page.evaluate(function () {
+      const t = document.body.innerText;
+      const idx = t.toLowerCase().indexOf('lane');
+      let pos = 'not found';
+      if (idx >= 0) {
+        const el = document.elementFromPoint(100, Math.min(window.innerHeight - 10, 500));
+        pos = 'found at char ' + idx;
+      }
+      return { hasLane: idx >= 0, pos: pos, scrollH: document.documentElement.scrollHeight };
+    });
+    log('Lazy-load dipicu (tinggi ' + height + ' -> ' + newHeight + ' px). Lane: ' + JSON.stringify(laneInfo));
   } catch (e) {
     log('Gagal memicu lazy-load:', e && e.message ? e.message : e);
   }
