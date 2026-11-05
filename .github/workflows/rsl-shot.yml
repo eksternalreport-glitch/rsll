@@ -52,7 +52,7 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ github.event.client_payload.chat_id || inputs.chat_id }}
           RSL_QUERY_TYPE: ${{ github.event.client_payload.query_type || '' }}
           CAPTURE_MODE: ${{ github.event.client_payload.capture_mode || inputs.capture_mode || 'page' }}
-        run: node rsl-shot-v2.js
+        run: node rsl-shot.js
 
       - name: Upload debug (selalu)
         if: always()
