@@ -390,7 +390,7 @@ async function captureResult(page, query) {
     });
   } else if (mode === 'page') {
     // Paksa semua konten lazy ter-render
-    await page.addStyleTag({ content: '* { content-visibility: visible !important; contain: none !important; } img, iframe { loading: eager !important; }' }).catch(function () {});
+    await page.addStyleTag({ content: '* { content-visibility: visible !important; contain: none !important; height: auto !important; max-height: none !important; overflow: visible !important; } img, iframe { loading: eager !important; } [hidden] { display: block !important; }' }).catch(function () {});
     await page.evaluate(function () {
       document.querySelectorAll('*').forEach(function (el) {
         const s = window.getComputedStyle(el);
@@ -398,6 +398,11 @@ async function captureResult(page, query) {
         if (s.visibility === 'hidden') el.style.visibility = 'visible';
         if (s.opacity === '0') el.style.opacity = '1';
         el.style.contentVisibility = 'visible';
+        el.style.contain = 'none';
+        el.style.height = 'auto';
+        el.style.maxHeight = 'none';
+        el.style.overflow = 'visible';
+        el.style.transform = 'none';
       });
     }).catch(function () {});
     await page.waitForTimeout(2000);
@@ -418,7 +423,44 @@ async function captureResult(page, query) {
     await page.evaluate(function () { window.scrollTo(0, 0); window.dispatchEvent(new Event('scroll')); });
     await page.waitForTimeout(3000);
 
-    // Ambil screenshot full page (semua konten termasuk header, lane, alarm)
+    // Cari elemen yang mengandung 'Lane', scroll ke sana, dan screenshot
+    const laneFound = await page.evaluate(function () {
+      const all = Array.from(document.querySelectorAll('*'));
+      const hits = all.filter(function (el) { return /Lane/i.test(el.textContent || ''); });
+      if (!hits.length) return { found: false };
+      let target = hits[0];
+      for (let i = 0; i < hits.length; i++) {
+        if (hits[i].children.length === 0 && (hits[i].innerText || '').trim().length > 0) { target = hits[i]; break; }
+      }
+      if (target.children.length > 0) {
+        let best = hits[0];
+        for (let i = 1; i < hits.length; i++) {
+          const t = (hits[i].innerText || '').trim();
+          if (t.length > 0 && t.length < (best.innerText || '').trim().length) best = hits[i];
+        }
+        target = best;
+      }
+      // Paksa visible
+      let el = target;
+      while (el && el !== document.documentElement) {
+        el.style.display = '';
+        el.style.visibility = 'visible';
+        el.style.opacity = '1';
+        el.style.contentVisibility = 'visible';
+        el.style.height = 'auto';
+        el.style.maxHeight = 'none';
+        el.style.overflow = 'visible';
+        el.style.transform = 'none';
+        el = el.parentElement;
+      }
+      // Scroll ke elemen
+      target.scrollIntoView({ behavior: 'instant', block: 'center' });
+      return { found: true, tag: target.tagName, text: String(target.textContent || '').slice(0, 80), rect: { y: Math.round(target.getBoundingClientRect().y), h: Math.round(target.getBoundingClientRect().height) } };
+    }).catch(function (e) { return { error: String(e && e.message || e) }; });
+    log('Lane element: ' + JSON.stringify(laneFound));
+    await page.waitForTimeout(5000);
+
+    // Ambil screenshot full page
     await page.evaluate(function () { window.scrollTo(0, 0); });
     await page.waitForTimeout(1000);
     const out = path.join(ART, 'rsl-page.png');
@@ -433,43 +475,8 @@ async function captureResult(page, query) {
     const hasLane = /Lane/i.test(txt);
     const hasCrc = /CRC/i.test(txt);
     const hasAlarm = /Active Alarms/i.test(txt);
-    // Diagnostik: cari elemen yang mengandung 'Lane' dan cek CSS-nya
-    const laneDiag = await page.evaluate(function () {
-      const all = Array.from(document.querySelectorAll('*'));
-      const hits = all.filter(function (el) { return /Lane/i.test(el.textContent || ''); });
-      if (!hits.length) return { found: false, totalHits: 0 };
-      // Ambil elemen terdalam
-      let target = hits[0];
-      for (let i = 0; i < hits.length; i++) {
-        if (hits[i].children.length === 0) { target = hits[i]; break; }
-      }
-      const r = target.getBoundingClientRect();
-      const s = window.getComputedStyle(target);
-      // Cek semua ancestor untuk overflow/visibility
-      const ancestors = [];
-      let p = target.parentElement;
-      while (p && p !== document.body) {
-        const ps = window.getComputedStyle(p);
-        ancestors.push({ tag: p.tagName, cls: String(p.className||'').slice(0,60), display: ps.display, visibility: ps.visibility, overflow: ps.overflow, height: Math.round(p.getBoundingClientRect().height) });
-        p = p.parentElement;
-      }
-      return {
-        found: true,
-        tag: target.tagName,
-        cls: String(target.className || '').slice(0, 120),
-        text: String(target.textContent || '').slice(0, 120),
-        rect: { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) },
-        display: s.display,
-        visibility: s.visibility,
-        opacity: s.opacity,
-        contentVisibility: s.contentVisibility,
-        overflow: s.overflow,
-        ancestors: ancestors.slice(0, 8)
-      };
-    }).catch(function (e) { return { error: String(e && e.message || e) }; });
     log('Teks Lane terdeteksi: ' + hasLane + ' (CRC: ' + hasCrc + ', Alarm: ' + hasAlarm + ')');
-    log('Lane diag: ' + JSON.stringify(laneDiag));
-    const diag = 'lane=' + hasLane + ' crc=' + hasCrc + ' alarm=' + hasAlarm + ' ' + JSON.stringify(laneDiag);
+    const diag = 'lane=' + hasLane + ' crc=' + hasCrc + ' alarm=' + hasAlarm;
     shots.push({ file: out, label: label(hasLane ? '' : ' (lane tidak terdeteksi: ' + diag + ')') });
   } else if (mode === 'full') {
     const out = path.join(ART, 'rsl-full.png');
