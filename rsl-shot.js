@@ -389,7 +389,6 @@ async function captureResult(page, query) {
       shots.push({ file: f, label: label('bagian ' + (i + 1) + '/' + files.length) });
     });
   } else if (mode === 'page') {
-    const out = path.join(ART, 'rsl-page.png');
     // Paksa semua konten lazy ter-render
     await page.addStyleTag({ content: '* { content-visibility: visible !important; contain: none !important; } img, iframe { loading: eager !important; }' }).catch(function () {});
     await page.evaluate(function () {
@@ -419,15 +418,15 @@ async function captureResult(page, query) {
     await page.evaluate(function () { window.scrollTo(0, 0); window.dispatchEvent(new Event('scroll')); });
     await page.waitForTimeout(3000);
 
-    // Ambil screenshot viewport di posisi bawah (tempat lane & alarm)
-    await page.evaluate(function () { window.scrollTo(0, document.documentElement.scrollHeight); });
-    await page.waitForTimeout(2000);
-    log('Screenshot viewport di posisi bawah (lane + alarm).');
+    // Ambil screenshot full page (semua konten termasuk header, lane, alarm)
+    await page.evaluate(function () { window.scrollTo(0, 0); });
+    await page.waitForTimeout(1000);
+    const out = path.join(ART, 'rsl-page.png');
+    log('Screenshot full page (termasuk header, lane, alarm).');
     await page.screenshot({ path: out, fullPage: true }).catch(function () {});
     if (!fs.existsSync(out)) {
       await page.screenshot({ path: out, fullPage: true }).catch(function () {});
     }
-    // Juga simpan full page untuk debug
     await page.screenshot({ path: path.join(ART, 'page-full.png'), fullPage: true }).catch(function () {});
 
     const txt = await page.locator('body').innerText().catch(function () { return ''; });
