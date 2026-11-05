@@ -473,19 +473,6 @@ async function captureResult(page, query) {
       await page.screenshot({ path: out, fullPage: true }).catch(function () {});
     }
     await page.screenshot({ path: path.join(ART, 'page-full.png'), fullPage: true }).catch(function () {});
-    // Screenshot elemen yang mengandung Lane (untuk debug)
-    try {
-      const laneEl = await page.locator('h4, h3, h2, div, span, p').filter({ hasText: /RSL Information Lane/i }).first();
-      if (await laneEl.count()) {
-        const laneShot = path.join(ART, 'rsl-lane.png');
-        await laneEl.screenshot({ path: laneShot }).catch(function (e) { log('Lane elem screenshot gagal: ' + (e && e.message ? e.message : e)); });
-        if (fs.existsSync(laneShot)) {
-          shots.push({ file: laneShot, label: label('RSL Information Lane') });
-          log('Lane element screenshot: ' + laneShot);
-        }
-      }
-    } catch (e) { log('Lane element screenshot error: ' + (e && e.message ? e.message : e)); }
-    const txt = await page.locator('body').innerText().catch(function () { return ''; });
     const hasLane = /Lane/i.test(txt);
     const hasCrc = /CRC/i.test(txt);
     const hasAlarm = /Active Alarms/i.test(txt);
