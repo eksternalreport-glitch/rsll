@@ -18,6 +18,7 @@
 //   RSL_QUERY_TYPE = ticket | hostname | order
 //   CAPTURE_MODE   = page (default) | full | sides | slices | both
 //   CAPTURE_SLICE_PX = tinggi potongan gambar saat mode slices (default 1300)
+//   REPLY_TO_MESSAGE_ID = ID pesan induk; foto dikirim sebagai reply (opsional)
 // ============================================================
 
 const { chromium } = require('playwright');
@@ -33,6 +34,7 @@ const QUERY = String(process.env.RSL_QUERY || '').trim();
 const QUERY_TYPE = String(process.env.RSL_QUERY_TYPE || '').trim().toLowerCase();
 const CAPTURE_MODE = String(process.env.CAPTURE_MODE || 'page').trim().toLowerCase();
 const SLICE_PX = Math.max(600, Number(process.env.CAPTURE_SLICE_PX || 1300) || 1300);
+const REPLY_TO = Math.max(0, Number(process.env.REPLY_TO_MESSAGE_ID || 0) || 0);
 const ART = path.join(process.cwd(), 'artifacts');
 
 function log() {
@@ -523,6 +525,12 @@ async function telegramSend(token, method, chatId, file, caption) {
   const fd = new FormData();
   fd.append('chat_id', String(chatId));
   if (caption) fd.append('caption', String(caption).slice(0, 1000));
+  if (REPLY_TO > 0) {
+    fd.append('reply_parameters', JSON.stringify({
+      message_id: REPLY_TO,
+      allow_sending_without_reply: true
+    }));
+  }
   const field = method === 'sendPhoto' ? 'photo' : 'document';
   fd.append(field, new Blob([buf], { type: 'image/png' }), 'rsl-result.png');
 
