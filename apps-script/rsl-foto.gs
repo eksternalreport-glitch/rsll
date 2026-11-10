@@ -1,25 +1,43 @@
 // ============================================================
-// HELPER APPS SCRIPT — perintah /rslfoto
-// Tempel di project BOT_TELEGRAM_FULL.gs.
+// HELPER APPS SCRIPT â€” perintah /rslfoto
+// Disalin dari BOT_TELEGRAM_FULL.gs; helper aktif ada di sana.
 //
 // Script Properties yang harus diisi:
-//   GITHUB_TOKEN = Personal Access Token (classic: scope "repo";
-//                  fine-grained: Contents = Read and write)
-//   GITHUB_REPO  = "username/nama-repo", contoh: "wahyu/rsl-screenshot-bot"
+//   GITHUB_TOKEN = Personal Access Token (classic: scope "repo")
+//   GITHUB_REPO  = "username/nama-repo", contoh: "eksternalreport-glitch/rsll"
 // ============================================================
 
 function isRslFotoCommand_(text) {
   return /^\/(?:rslfoto|rsl-foto|rslshot)(?:@\w+)?(?:\s|$)/i.test(String(text || '').trim());
 }
 
+// Ambil message_id dari response JSON sendMessage Telegram.
+function telegramMessageId_(responseText) {
+  try {
+    const o = JSON.parse(String(responseText || ''));
+    if (o && o.ok === true && o.result && o.result.message_id) {
+      return Number(o.result.message_id) || 0;
+    }
+  } catch (e) {}
+  return 0;
+}
+
 // Picu workflow GitHub Actions (event: repository_dispatch / rsl-shot).
-function rslFotoTrigger_(chatId, query) {
+// replyToMessageId = message_id pesan teks RSL; foto dikirim sebagai reply ke teks itu.
+function rslFotoTrigger_(chatId, query, replyToMessageId) {
   const p = PropertiesService.getScriptProperties();
   const token = p.getProperty('GITHUB_TOKEN');
   const repo = p.getProperty('GITHUB_REPO');
   if (!token || !repo) {
     throw new Error('GITHUB_TOKEN / GITHUB_REPO belum diisi di Script Properties.');
   }
+
+  const replyMid = Number(replyToMessageId || 0);
+  const payload = {
+    query: String(query || '').trim(),
+    chat_id: String(chatId)
+  };
+  if (replyMid > 0) payload.reply_to_message_id = replyMid;
 
   const res = UrlFetchApp.fetch('https://api.github.com/repos/' + repo + '/dispatches', {
     method: 'post',
@@ -31,10 +49,7 @@ function rslFotoTrigger_(chatId, query) {
     },
     payload: JSON.stringify({
       event_type: 'rsl-shot',
-      client_payload: {
-        query: String(query || '').trim(),
-        chat_id: String(chatId)
-      }
+      client_payload: payload
     }),
     muteHttpExceptions: true
   });
@@ -50,7 +65,7 @@ function handleRslFoto_(chatId, query) {
   if (!q) {
     sendMessage(
       chatId,
-      '📸 *Screenshot RSL*\n\n' +
+      'ðŸ“¸ *Screenshot RSL*\n\n' +
       'Contoh:\n' +
       '`/rslfoto INC-20261022-00022727`\n' +
       '`/rslfoto BDG-PSKJ-EN1-C512Z`',
@@ -60,15 +75,17 @@ function handleRslFoto_(chatId, query) {
   }
 
   try {
-    rslFotoTrigger_(chatId, q);
-    sendMessage(
+    // Kirim konfirmasi dulu, lalu foto hasil screenshot di-reply ke pesan ini.
+    const confirmRes = sendMessage(
       chatId,
-      '📸 Screenshot RSL untuk *' + q + '* sedang diproses.\n' +
-      'Hasil dikirim ke chat ini dalam ±1–3 menit.',
+      'ðŸ“¸ Screenshot RSL untuk *' + q + '* sedang diproses.\n' +
+      'Hasil dikirim ke chat ini dalam Â±1â€“3 menit.',
       'Markdown'
     );
+    const confirmId = telegramMessageId_(confirmRes);
+    rslFotoTrigger_(chatId, q, confirmId);
   } catch (e) {
-    sendMessage(chatId, '⚠️ Gagal memicu screenshot:\n' + e.message, 'Markdown');
+    sendMessage(chatId, 'âš ï¸ Gagal memicu screenshot:\n' + e.message, 'Markdown');
   }
 }
 
@@ -90,4 +107,4 @@ function handleRslFoto_(chatId, query) {
 //    }
 //
 // 3) Tambahkan baris bantuan di menu:
-//    `• *\/rslfoto* <tiket|hostname> — screenshot halaman RSL (via GitHub Actions)\n` +
+//    `â€¢ *\/rslfoto* <tiket|hostname> â€” screenshot halaman RSL (via GitHub Actions)\n` +
