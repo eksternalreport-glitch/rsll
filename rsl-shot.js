@@ -206,6 +206,60 @@ async function submitQuery(page, input) {
   log('Enter ditekan (tombol GO tidak ditemukan).');
 }
 
+// ============================================================
+// HOSTNAME PAIR â€” UI BARU: NEAR END / FAR END (vue-multiselect)
+// ============================================================
+async function multiselectPick(page, inputId, value) {
+  const safe = String(value || '').trim();
+  if (!safe) throw new Error('Hostname kosong untuk ' + inputId);
+
+  const input = page.locator('#' + inputId).first();
+  const wrap = page.locator('.multiselect').filter({ has: page.locator('#' + inputId) }).first();
+
+  // Klik wrapper untuk membuka dropdown (atau fokus ke input).
+  try { await wrap.click({ force: true }); }
+  catch (eOpen) { await input.click({ force: true }); }
+  await page.waitForTimeout(400);
+
+  await input.waitFor({ state: 'attached', timeout: 10000 });
+  await input.evaluate(function (el) { el.value = ''; el.dispatchEvent(new Event('input', { bubbles: true })); });
+  await input.fill(safe);
+  await page.waitForTimeout(1200);
+
+  const esc = safe.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const optionExact = page.locator('.multiselect__option').filter({ hasText: new RegExp(esc, 'i') }).first();
+  const firstOption = page.locator('.multiselect__option').first();
+  const optCount = await optionExact.count().catch(function () { return 0; });
+  const opt = optCount > 0 ? optionExact : firstOption;
+  await opt.waitFor({ state: 'visible', timeout: 15000 });
+  await opt.click();
+  const label = await opt.innerText().catch(function () { return safe; });
+  log('Dipilih ' + inputId + ':', String(label || safe).trim());
+  await page.waitForTimeout(500);
+}
+
+async function queryHostnamePair(page, query) {
+  const parts = String(query || '').trim().split(/[\s,;\/]+/).filter(Boolean);
+  if (parts.length === 0) throw new Error('Query hostname kosong.');
+  const near = parts[0];
+  const far = parts.length > 1 ? parts[1] : parts[0];
+  log('NEAR END:', near, '| FAR END:', far);
+
+  await multiselectPick(page, 'single-near-end', near);
+  await page.waitForTimeout(1500);
+  await multiselectPick(page, 'single-far-end', far);
+
+  const go = page.getByRole('button', { name: /^GO$/i }).first();
+  const hasGo = await go.count().catch(function () { return 0; });
+  if (hasGo > 0) {
+    await go.click();
+    log('Tombol GO diklik.');
+  } else {
+    await page.locator('button:has-text("GO")').first().click();
+    log('Tombol GO (fallback) diklik.');
+  }
+}
+
 async function waitForResult(page) {
   const started = Date.now();
 
@@ -381,7 +435,7 @@ async function captureResult(page, query) {
   const mode = CAPTURE_MODE;
 
   const label = function (suffix) {
-    return 'RSL ' + query + (suffix ? ' · ' + suffix : '');
+    return 'RSL ' + query + (suffix ? ' Â· ' + suffix : '');
   };
 
   if (mode === 'slices') {
@@ -602,17 +656,30 @@ async function main() {
 
     await pickQueryType(page, isTicket).catch(function () {});
 
-    let input = await findQueryInput(page);
-    if (!input) {
-      await saveDebug(page, 'input-tidak-ditemukan');
-      throw new Error('Kolom input query tidak ditemukan. Lihat artifacts/input-tidak-ditemukan.*');
-    }
+    const isHostnameMode = (QUERY_TYPE === 'hostname') || ((!QUERY_TYPE) && !isTicket);
+    const hasPairUI = await page.locator('#single-near-end').count().catch(function () { return 0; });
 
-    log('Isi query ke kolom input...');
-    await input.click().catch(function () {});
-    await input.fill('');
-    await input.fill(QUERY);
-    await submitQuery(page, input);
+    if (isHostnameMode && hasPairUI) {
+      try {
+        await queryHostnamePair(page, QUERY);
+      } catch (ePair) {
+        log('Hostname pair gagal:', ePair && ePair.message ? ePair.message : ePair);
+        await saveDebug(page, 'hostname-pair-gagal');
+        throw ePair;
+      }
+    } else {
+      let input = await findQueryInput(page);
+      if (!input) {
+        await saveDebug(page, 'input-tidak-ditemukan');
+        throw new Error('Kolom input query tidak ditemukan. Lihat artifacts/input-tidak-ditemukan.*');
+      }
+
+      log('Isi query ke kolom input...');
+      await input.click().catch(function () {});
+      await input.fill('');
+      await input.fill(QUERY);
+      await submitQuery(page, input);
+    }
 
     log('Menunggu hasil query (mode capture: ' + CAPTURE_MODE + ')...');
     const ok = await waitForResult(page);
@@ -624,14 +691,31 @@ async function main() {
     await triggerLazyLoad(page);
     await waitForDetail(page);
 
-    const shots = await captureResult(page, QUERY);    for (let i = 0; i < shots.length; i++) {
+    const shots = await captureResult(page, QUERY);
+    for (let i = 0; i < shots.length; i++) {
       await sendToTelegram(botToken, chatId, shots[i].file, shots[i].label);
       if (i < shots.length - 1) await page.waitForTimeout(1200);
     }
     log('SELESAI. ' + shots.length + ' gambar terkirim.');
   } catch (err) {
-    log('GAGAL:', err && err.message ? err.message : err);
+    const msgErr = err && err.message ? err.message : String(err || 'Gagal tanpa pesan');
+    log('GAGAL:', msgErr);
     await saveDebug(page, 'gagal');
+    try {
+      const tgRes = await fetch('https://api.telegram.org/bot' + botToken + '/sendMessage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: 'RSL gagal: ' + msgErr.slice(0, 350),
+          reply_parameters: REPLY_TO > 0 ? { message_id: REPLY_TO, allow_sending_without_reply: true } : undefined
+        })
+      });
+      const tgBody = await tgRes.text();
+      log('Notifikasi Telegram terkirim:', tgRes.status, tgBody.slice(0, 300));
+    } catch (eNotify) {
+      log('Notifikasi Telegram gagal:', eNotify && eNotify.message ? eNotify.message : eNotify);
+    }
     process.exitCode = 1;
   } finally {
     await browser.close().catch(function () {});
