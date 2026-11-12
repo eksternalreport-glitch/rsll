@@ -207,7 +207,7 @@ async function submitQuery(page, input) {
 }
 
 // ============================================================
-// HOSTNAME PAIR â€” UI BARU: NEAR END / FAR END (vue-multiselect)
+// HOSTNAME PAIR — UI BARU: NEAR END / FAR END (vue-multiselect)
 // ============================================================
 async function multiselectPick(page, inputId, value) {
   const safe = String(value || '').trim();
@@ -302,37 +302,13 @@ async function triggerLazyLoad(page) {
         if (s.opacity === '0') el.style.opacity = '1';
       });
     });
-    await page.waitForTimeout(2000);
-
-    const height = await page.evaluate(function () { return document.documentElement.scrollHeight; });
-    const step = 150;
-    for (let y = 0; y < height; y += step) {
-      await page.evaluate(function (yy) {
-        window.scrollTo(0, yy);
-        window.dispatchEvent(new Event('scroll'));
-        window.dispatchEvent(new Event('resize'));
-      }, y);
-      await page.waitForTimeout(300);
-    }
-    // Pastikan sampai paling bawah
-    await page.evaluate(function () { window.scrollTo(0, document.documentElement.scrollHeight); window.dispatchEvent(new Event('scroll')); });
-    await page.waitForTimeout(8000);
-    // Kembali ke atas
-    await page.evaluate(function () { window.scrollTo(0, 0); window.dispatchEvent(new Event('scroll')); });
     await page.waitForTimeout(1500);
-    const newHeight = await page.evaluate(function () { return document.documentElement.scrollHeight; });
-    // Cek posisi teks Lane
-    const laneInfo = await page.evaluate(function () {
-      const t = document.body.innerText;
-      const idx = t.toLowerCase().indexOf('lane');
-      let pos = 'not found';
-      if (idx >= 0) {
-        const el = document.elementFromPoint(100, Math.min(window.innerHeight - 10, 500));
-        pos = 'found at char ' + idx;
-      }
-      return { hasLane: idx >= 0, pos: pos, scrollH: document.documentElement.scrollHeight };
-    });
-    log('Lazy-load dipicu (tinggi ' + height + ' -> ' + newHeight + ' px). Lane: ' + JSON.stringify(laneInfo));
+    // Satu scroll penuh ke bawah & kembali ke atas (cukup memicu intersection observer RSL)
+    await page.evaluate(function () { window.scrollTo(0, document.documentElement.scrollHeight); });
+    await page.waitForTimeout(4000);
+    await page.evaluate(function () { window.scrollTo(0, 0); });
+    await page.waitForTimeout(1000);
+    log('Lazy-load dipicu (scroll penuh).');
   } catch (e) {
     log('Gagal memicu lazy-load:', e && e.message ? e.message : e);
   }
@@ -435,7 +411,7 @@ async function captureResult(page, query) {
   const mode = CAPTURE_MODE;
 
   const label = function (suffix) {
-    return 'RSL ' + query + (suffix ? ' Â· ' + suffix : '');
+    return 'RSL ' + query + (suffix ? ' · ' + suffix : '');
   };
 
   if (mode === 'slices') {
@@ -463,20 +439,8 @@ async function captureResult(page, query) {
     }).catch(function () {});
     await page.waitForTimeout(2000);
 
-    // Scroll ke bawah perlahan untuk memicu lazy-load
-    const totalH = await page.evaluate(function () { return document.documentElement.scrollHeight; });
-    const step = 150;
-    for (let y = 0; y < totalH; y += step) {
-      await page.evaluate(function (yy) {
-        window.scrollTo(0, yy);
-        window.dispatchEvent(new Event('scroll'));
-      }, y);
-      await page.waitForTimeout(300);
-    }
-    await page.evaluate(function () { window.scrollTo(0, document.documentElement.scrollHeight); window.dispatchEvent(new Event('scroll')); });
-    await page.waitForTimeout(10000);
-    // Tetap di bawah agar lazy content tidak hilang
-    // (jangan scroll ke atas sebelum screenshot)
+    // Lazy-load sudah dipicu di triggerLazyLoad; di sini cukup tunggu sebentar
+    await page.waitForTimeout(1500);
 
 
     // Cari elemen yang mengandung 'Lane', paksa visible + semua ancestor
@@ -518,7 +482,17 @@ async function captureResult(page, query) {
     // Ambil screenshot full page
     // Scroll ke posisi lane dan tunggu data render
     await page.evaluate(function () { window.scrollTo(0, 480); });
-    await page.waitForTimeout(15000);
+    // Poll cepat untuk Lane / Active Alarms (maks 4 detik)
+    const laneOk = await (async function waitLane() {
+      const started = Date.now();
+      while (Date.now() - started < 4000) {
+        const t = await page.locator('body').innerText().catch(function () { return ''; });
+        if (/Lane|Active Alarms/i.test(t)) return true;
+        await page.waitForTimeout(500);
+      }
+      return false;
+    })();
+    log('Lane/alarm terdeteksi:', laneOk);
     // Ambil screenshot full page (semua konten termasuk header, lane, alarm)
     await page.evaluate(function () { window.scrollTo(0, 0); });
     await page.waitForTimeout(2000);
