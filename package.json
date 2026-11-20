@@ -1,12 +1,13 @@
 {
-  "name": "rsl-screenshot-bot",
+  "name": "kpi-report-github",
   "version": "1.0.0",
   "private": true,
-  "description": "Screenshot halaman RSL (DataPilot) via GitHub Actions, kirim ke Telegram.",
+  "description": "Render laporan KPI MTEL gaya dashboard ke PNG dan kirim ke Telegram (dipicu bot Apps Script).",
+  "main": "render-kpi.js",
   "scripts": {
-    "start": "node rsl-shot.js"
+    "render": "node render-kpi.js"
   },
   "dependencies": {
-    "playwright": "^1.49.0"
+    "playwright": "^1.47.2"
   }
 }
