@@ -1,141 +1,86 @@
-# RSL Screenshot Bot
+# KPI Report — renderer GitHub Actions
 
-Screenshot halaman **DataPilot RSL Query** (tenant 1057) memakai GitHub Actions + Playwright, lalu mengirim hasilnya ke Telegram. Tidak perlu PC/server yang selalu menyala.
+Renderer PNG laporan **KPI MTEL** (FIBERISASI & TIS) dan **KPI Lintas Arta**
+gaya dashboard (tabel gelap, warna hijau/amber/merah, action item per branch).
+Dipicu dari bot Telegram (`/kpimtel`, `/kpila`, atau tombol admin
+"📊 KPI MTEL ke Grup" / "📊 KPI LA ke Grup") lewat `repository_dispatch`,
+lalu mengirim foto + caption ke chat/grup.
 
-```
-repository_dispatch (dari Apps Script)
-        │
-        ▼
-GitHub Actions (ubuntu, Chromium)
-  ├─ login CAS  (#username / #password / #loginButton)
-  ├─ isi query tiket / hostname
-  ├─ tunggu tabel hasil
-  ├─ screenshot elemen hasil
-  └─ kirim ke Telegram (sendPhoto)
-```
-
-## Isi repo
+## Isi folder
 
 ```
-.github/workflows/rsl-shot.yml   workflow GitHub Actions
-rsl-shot.js                      script Playwright
-package.json                     dependency
-apps-script/rsl-foto.gs          helper perintah /rslfoto untuk bot
-README.md
+.github/workflows/kpi-report.yml   workflow GitHub Actions
+render-kpi.js                      fetcher data + builder HTML + Playwright + kirim Telegram
+kpi-style.css                      CSS dashboard (diextrak dari Index dashboard) supaya tampilan sama
+package.json
 ```
 
-## 1. Buat repo
+## Cara pasang (sekali saja)
 
-1. Buka <https://github.com/new>.
-2. Nama: `rsl-screenshot-bot` (bebas).
-3. Pilih **Private** → **Create repository**.
+1. **Copy folder ini ke repo GitHub yang sama dengan screenshot RSL**
+   (`GITHUB_REPO` yang sudah dipakai bot). Struktur akhir di repo:
 
-## 2. Upload file
+   ```
+   .github/workflows/kpi-report.yml
+   render-kpi.js
+   kpi-style.css
+   package.json
+   ```
 
-**Cara A — lewat web GitHub (tanpa git):**
+   Kalau repo RSL sudah punya `.github/workflows/`, tambahkan file `kpi-report.yml`
+   di folder yang sama (jangan menimpa workflow RSL).
 
-1. Di repo baru, klik **Add file → Upload files**.
-2. Drag isi folder `rsl-screenshot-bot` (kecuali `node_modules`; belum ada).
-3. Kalau folder `.github` tidak ikut ter-upload (tersembunyi di Windows Explorer), buat manual:
-   - **Add file → Create new file**
-   - Nama file: `.github/workflows/rsl-shot.yml`
-   - Paste isi `rsl-shot.yml` → **Commit changes**.
-4. Pastikan file `rsl-shot.js`, `package.json`, dan `README.md` sudah ada di root repo.
+2. **Repo → Settings → Secrets and variables → Actions → New repository secret**
 
-**Cara B — kalau nanti ada Git:**
+   | Nama | Isi |
+   |---|---|
+   | `TELEGRAM_BOT_TOKEN` | token bot (`8725524193:AAFK...`) — kalau sudah ada untuk RSL, pakai yang sama |
+   | `KPI_JSON_URL` | `https://script.google.com/macros/s/AKfycbwvFQX1vpHrLDXeyYVvGkeemUHuRX1-IOl4UfUCreFTrf4ThPIgVZMt-XMroJmSYt39xQ/exec?op=kpiMtEl&token=kpi-report-ms-eksternal-2026-3f9a7c1e5b8d2` |
 
-```bash
-cd rsl-screenshot-bot
-git init
-git add .
-git commit -m "RSL screenshot bot"
-git branch -M main
-git remote add origin https://github.com/USERNAME/rsl-screenshot-bot.git
-git push -u origin main
-```
+   Endpoint LA **tidak perlu** secret tambahan: renderer otomatis mengganti
+   `op=kpiMtEl` → `op=kpiLa` dari URL yang sama. (Kalau suatu saat mau dipisah,
+   tambahkan secret `KPI_LA_JSON_URL`.)
 
-## 3. Isi Secrets
+3. **Commit & push ke branch default** (`main`/`master`). Workflow harus ada di
+   branch default supaya `repository_dispatch` jalan.
 
-Repo → **Settings → Secrets and variables → Actions → New repository secret**:
+4. **Bot Apps Script** — Script Properties (sudah ada untuk RSL, tidak perlu diubah):
 
-| Nama | Isi |
-|---|---|
-| `RSL_USER` | username RSL / DataPilot |
-| `RSL_PASS` | password RSL |
-| `TELEGRAM_BOT_TOKEN` | token bot Telegram (yang dipakai bot patroli) |
+   - `GITHUB_TOKEN` — PAT dengan izin dispatch repo
+   - `GITHUB_REPO` — `username/nama-repo`
 
-Chat ID **tidak** disimpan di repo; dikirim dari bot saat memicu.
+5. Tes manual: repo → **Actions → KPI MTEL report → Run workflow**. (Tanpa payload
+   chat id, job akan gagal di langkah render dengan pesan `chat_ids kosong` — itu normal;
+   tes yang sebenarnya dari bot.)
 
-## 4. Tes manual
+## Alur dari bot
 
-1. Buka tab **Actions** → pilih **RSL Screenshot** → **Run workflow**.
-2. Isi:
-   - `query`: `INC-20261022-00022727` (atau hostname)
-   - `chat_id`: chat ID Telegram Anda (bisa dilihat dengan `/id` di bot)
-3. Klik **Run workflow**.
-4. Tunggu ±1–2 menit. Foto akan masuk ke Telegram.
+### KPI MTEL (`/kpimtel`)
 
-Kalau gagal, buka run yang merah → **Artifacts → rsl-debug**:
-- `page-full.png` — kondisi halaman terakhir
-- `*.html` — HTML halaman
-- `*-fields.json` — daftar input/tombol/select yang terdeteksi
+1. Admin kirim `/kpimtel` (atau tombol **📊 KPI MTEL ke Grup**).
+2. Bot mengambil angka dari endpoint `op=kpiMtEl` → menyusun caption → kirim
+   `repository_dispatch` event `kpi-report` berisi `kind: "mtel"`, `chat_ids`,
+   `fib_caption`, `tis_caption`.
+3. GitHub Actions render 2 PNG (FIBERISASI & TIS) dari HTML bergaya dashboard.
+4. Workflow kirim 2 foto + caption ke chat/grup tujuan (via `sendPhoto`).
 
-Kirim artifact itu untuk penyesuaian selector.
+### KPI Lintas Arta (`/kpila`)
 
-## 5. Sambungkan ke bot Telegram
+1. Admin kirim `/kpila` (atau tombol **📊 KPI LA ke Grup**).
+2. Bot mengambil data dari endpoint `op=kpiLa` (SLA per branch: `scoreRT`,
+   `scoreOST`, `scoreTTR`, `scoreTTP`, `scorePM`, `final`, `prevRank`) →
+   caption per branch + GT → dispatch dengan `kind: "la"` dan `la_caption`.
+3. Actions render 1 PNG tabel KPI Lintas Arta (kolom RT/OST/TTR/TTP/PM/FINAL,
+   MOM, status, action item) lalu kirim ke chat/grup.
 
-Di Apps Script bot, isi **Script Properties**:
+Kalau `GITHUB_TOKEN`/`GITHUB_REPO` belum diisi, bot otomatis fallback: MTEL
+memakai render Google Charts lama (tabel putih), LA mengirim caption teks saja.
 
-| Nama | Isi |
-|---|---|
-| `GITHUB_TOKEN` | Personal Access Token |
-| `GITHUB_REPO` | `USERNAME/rsl-screenshot-bot` |
+## Catatan
 
-Pembuatan token:
-
-- **Fine-grained token** (disarankan): GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token.
-  - Repository access: **Only select repositories** → pilih repo di atas.
-  - Permissions → Repository permissions → **Contents: Read and write**.
-- **Classic token**: scope `repo`.
-
-Lalu:
-
-1. Copy isi `apps-script/rsl-foto.gs` ke project bot (paling bawah file).
-2. Sambungkan router pesan sesuai komentar di bagian bawah file itu.
-3. Save → jalankan `/rslfoto INC-...` di Telegram.
-
-## 6. Batasan & troubleshooting
-
-- **WAF / IP diblokir**: kalau `teleows.com` menolak IP GitHub/AWS, halaman tidak bisa dibuka dari cloud. Solusinya VPS dengan IP yang diizinkan.
-- **OTP SMS / captcha**: halaman login punya opsi SMS code. Kalau akun wajib OTP, login otomatis gagal.
-- **Selector berubah**: kalau tampilan RSL berubah, script mungkin perlu disesuaikan. Debug artifact membantu.
-- **Kuota**: repo private gratis 2.000 menit/bulan. Satu run ±1–2 menit.
-- **Hasil screenshot**: default diambil per sisi (kartu Near End & Far End). Ubah lewat `CAPTURE_MODE` bila ingin full page atau dipotong.
-
-## 7. Variabel opsional
-
-Bisa diatur sebagai env di workflow:
-
-| Env | Fungsi |
-|---|---|
-| `RSL_URL` | override URL halaman RSL |
-| `RSL_QUERY_TYPE` | `ticket` / `hostname` / `order` untuk memaksa tipe query |
-| `CAPTURE_MODE` | `sides` (default), `full`, `slices`, `both` |
-| `CAPTURE_SLICE_PX` | tinggi potongan gambar untuk mode `slices` (default 1300) |
-
-Arti `CAPTURE_MODE`:
-
-| Mode | Hasil |
-|---|---|
-| `sides` | 2 foto: kartu Near End dan Far End (paling terbaca di HP) |
-| `full` | 1 foto seluruh laporan (Near & Far berdampingan) |
-| `slices` | laporan dipotong vertikal jadi beberapa foto |
-| `both` | 1 foto seluruh laporan + 2 foto per sisi |
-
-Saat tes manual (**Run workflow**) kolom `capture_mode` bisa diisi langsung, jadi tidak perlu ubah file.
-
-## 8. Catatan tampilan
-
-Script memakai viewport **1600×1000** supaya grid `2xl:grid-cols-2` aktif, sehingga Near End dan Far End tampil berdampingan seperti di PC, dan `deviceScaleFactor 2` agar teks tetap tajam.
-
-Data yang ikut terlihat di screenshot: hostname, site, IP PTP, nilai CRC, dan serial SFP. Pastikan boleh dibagikan ke Telegram/runner GitHub.
+- Data & angka berasal dari endpoint dashboard yang sama dengan tombol **📋 Report KPI**
+  (MTEL) dan tabel KPI Lintas Arta di dashboard, jadi MTTR/COMP/AVAIL/PM/OVERALL/
+  FINAL/ranking konsisten.
+- Caption disusun bot dari JSON yang sama, jadi caption dan gambar tidak beda angka.
+- LA: `BOGOR` ditampilkan sebagai `SUKABUMI` (sama dengan dashboard).
+- Biaya: GitHub Actions gratis untuk repo publik; repo privat memakai kuota menit bulanan.
